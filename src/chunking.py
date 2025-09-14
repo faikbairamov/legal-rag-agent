@@ -1,5 +1,10 @@
+import os
 import re
 from typing import List, Dict, Optional, Tuple, Iterable, Iterator
+
+import tiktoken
+
+_ENCODING = tiktoken.get_encoding(os.getenv("TIKTOKEN_ENCODING", "cl100k_base"))
 
 
 def _find_article_sections(text: str) -> List[Tuple[int, int, Dict[str, str]]]:
@@ -25,9 +30,10 @@ def _find_article_sections(text: str) -> List[Tuple[int, int, Dict[str, str]]]:
     return sections
 
 
-def _estimate_tokens(text: str) -> int:
-    # Rough heuristic: ~4 chars per token; avoid heavy deps here.
-    return max(1, len(text) // 4)
+
+def _count_tokens(text: str) -> int:
+    """Return number of tokens for the given text using tiktoken."""
+    return len(_ENCODING.encode(text))
 
 
 def iter_chunks(
@@ -45,9 +51,10 @@ def iter_chunks(
 
     for (b_start, b_end, meta) in blocks:
         block = text[b_start:b_end]
+        avg_chars_per_token = len(block) / max(1, _count_tokens(block))
         start = 0
         while start < len(block):
-            approx_target_chars = target_tokens * 4
+            approx_target_chars = int(target_tokens * avg_chars_per_token)
             end = min(len(block), start + approx_target_chars)
 
             boundary = -1
@@ -74,7 +81,7 @@ def iter_chunks(
 
             if end >= len(block):
                 break
-            overlap_chars = max(0, overlap_tokens * 4)
+            overlap_chars = int(overlap_tokens * avg_chars_per_token)
             start = max(0, end - overlap_chars)
 
 
